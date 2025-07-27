@@ -130,10 +130,11 @@ jobs:
           git checkout -b dry-$MERGE_BASE origin/$MERGE_BASE
           git merge --no-commit --no-ff origin/${{ inputs.source_branch }} || echo "error_branch=$MERGE_BASE" >> $GITHUB_OUTPUT
 
-          for TARGET in "${BRANCHES[@]}"; do
-           git checkout -b dry-$TARGET origin/$TARGET
-           git merge --no-commit --no-ff  origin/${{ inputs.source_branch }}  || echo "error_branch=$TARGET" >> $GITHUB_OUTPUT
-           
+          for TARGET in "${BRANCHES[@]}"; dogit reset --hard
+          git clean -fd
+          git checkout -b "dry-$BRANCH" "origin/$BRANCH"
+          git merge --no-commit --no-ff "$MERGE_BASE" || echo "merge failed for $BRANCH"
+          MERGE_BASE=$BRANCH
           done
         continue-on-error: true
 
