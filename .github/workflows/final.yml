@@ -132,8 +132,8 @@ jobs:
 
           for TARGET in "${BRANCHES[@]}"; do
            git checkout -b dry-$TARGET origin/$TARGET
-           git merge --no-commit --no-ff dry-$MERGE_BASE || echo "error_branch=$TARGET" >> $GITHUB_OUTPUT
-           MERGE_BASE=$TARGET
+           git merge --no-commit --no-ff  origin/${{ inputs.source_branch }}  || echo "error_branch=$TARGET" >> $GITHUB_OUTPUT
+           
           done
         continue-on-error: true
 
