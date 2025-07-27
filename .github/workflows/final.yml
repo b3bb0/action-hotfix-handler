@@ -126,23 +126,23 @@ jobs:
           MERGE_BASE=$DEFAULT_BRANCH
           BRANCHES=$(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' ')
           echo "Branches: $BRANCHES"
-
-          git checkout -b dry-$MERGE_BASE origin/$MERGE_BASE
-          git merge --no-ff origin/${{ inputs.source_branch }} 
-          git commit -m "Hotfix: ${{ github.event.pull_request.title }}"
-        
-
-          for TARGET in "${BRANCHES[@]}"; dogit reset --hard
-
-             git checkout -b "dry-$TARGET" "origin/$TARGET
-             if [ "${{ steps.meta.outputs.merge_mode }}" = "no-ff" ]; then
-                git merge --no-ff "dry-$MERGE_BASE" 
-             else
-                git merge --ff-only "dry-$MERGE_BASE"
-             fi
-             git commit -m "Hotfix: ${{ github.event.pull_request.title }}"
-             MERGE_BASE=$TARGET
+          HOTFIX_BRANCH="${{ inputs.source_branch }}"
+          
+          git fetch origin
+          MERGE_BASE="$DEFAULT_BRANCH"
+          git checkout -b "dry-$MERGE_BASE" "origin/$MERGE_BASE"
+          git merge  --no-ff "origin/$HOTFIX_BRANCH" -m "testing dry run" || echo "Merge into $MERGE_BASE failed"
+          
+          for TARGET in "${BRANCHES[@]}"; do
+             git reset --hard
+             git clean -fd
+             
+             git checkout -b "dry-$TARGET" "origin/$TARGET"
+             git merge --no-ff "dry-$MERGE_BASE" -m "dry run" || echo "Merge into $TARGET failed"
+             
+             MERGE_BASE="$TARGET"
           done
+
         continue-on-error: true
 
       - name: ❌ Comment if dry-run fails
