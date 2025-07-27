@@ -1,21 +1,32 @@
-name: 🔁 Full Hotfix Flow
+name: ♻️ Hotfix Handler
 
 on:
-  pull_request:
-    types: [opened, edited, synchronize]
-    branches:
-      - main
-      - master
-
-permissions:
-  contents: write
-  pull-requests: write
+  workflow_call:
+    inputs:
+      pr_number:
+        type: number
+        required: true
+      pr_title:
+        type: string
+        required: true
+      source_branch:
+        type: string
+        required: true
+      merge_mode:
+        type: string
+        required: false
+        default: "ff"
+      tag:
+        type: string
+        required: false
+        default: ""
+      branches:
+        type: string
+        required: false
 
 jobs:
   handle-hotfix:
-    if: startsWith(github.head_ref, 'hotfix/')
     runs-on: ubuntu-latest
-
     outputs:
       resolved_branches: ${{ steps.resolve_branches.outputs.branches }}
 
