@@ -120,6 +120,9 @@ jobs:
           git fetch origin
           
           source $GITHUB_ENV
+          DEFAULT_BRANCH=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
+          echo "default_branch=$DEFAULT_BRANCH" 
+
           MERGE_BASE=$DEFAULT_BRANCH
           BRANCHES=$(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' ')
           echo "Branches: $BRANCHES"
