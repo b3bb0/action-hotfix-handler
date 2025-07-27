@@ -1,5 +1,7 @@
 name: ♻️ Hotfix Handler
 
+
+
 on:
   workflow_call:
     inputs:
@@ -15,50 +17,87 @@ on:
       merge_mode:
         type: string
         required: false
-        default: 'ff'
+        default: "ff"
       tag:
         type: string
         required: false
-        default: ''
+        default: ""
       branches:
         type: string
         required: false
-        default: 'staging,qa,dev'
-        description: "Comma-separated downstream branches (e.g. staging,qa,dev)"
 
 jobs:
-  hotfix:
+  handle-hotfix:
     runs-on: ubuntu-latest
+    outputs:
+      resolved_branches: ${{ steps.resolve_branches.outputs.branches }}
 
     steps:
-      - uses: actions/checkout@v3
+      - name: 🧰 Checkout repository
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: 🧰 Set Git identity
+      - name: 🔧 Set Git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: 🔍 Detect default branch from git remote
-        id: detect_default
+      - name: 🧩 Resolve downstream branches
+        id: resolve_branches
         run: |
-          DEFAULT_BRANCH=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
-          echo "default_branch=$DEFAULT_BRANCH" >> $GITHUB_OUTPUT
+          INPUT_BRANCHES=$(echo '${{ github.event.pull_request.body }}' | grep -Po '"branches"\s*:\s*\[\K[^\]]+' | tr -d '"' | tr -d ' ')
+          if [ -n "$INPUT_BRANCHES" ]; then
+            echo "branches=$INPUT_BRANCHES" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
-      - name: 🧪 Parse downstream branches
-        id: parsed
+          if [ -n "${{ env.HOTFIX_BRANCHES }}" ]; then
+            echo "branches=${{ env.HOTFIX_BRANCHES }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [ -f .github/.hotfixrc.yaml ]; then
+            VALUE=$(grep -A 10 branches .github/.hotfixrc.yaml | grep '-' | sed 's/- //' | paste -sd "," -)
+            echo "branches=$VALUE" >> $GITHUB_OUTPUT
+            exit 0
+          elif [ -f .hotfixrc.yaml ]; then
+            VALUE=$(grep -A 10 branches .hotfixrc.yaml | grep '-' | sed 's/- //' | paste -sd "," -)
+            echo "branches=$VALUE" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "branches=staging,qa,dev" >> $GITHUB_OUTPUT
+
+      - name: 📦 Parse PR metadata
+        id: meta
         run: |
-          IFS=',' read -ra BRANCHES <<< "${{ inputs.branches }}"
-          JSON_ARRAY=$(printf '"%s",' "${BRANCHES[@]}" | sed 's/,$//')
-          echo "branches=[$JSON_ARRAY]" >> $GITHUB_OUTPUT
+          BODY_FILE=pr_body.txt
+          gh pr view ${{ github.event.pull_request.number }} --json body -q .body > $BODY_FILE
 
-      - name: 🛑 Validate hotfix is based on default branch
+          MERGE_MODE="ff"
+          TAG=""
+
+          if grep -iqE 'no-ff.*\[x\]|\[x\].*no-ff' $BODY_FILE; then
+            MERGE_MODE="no-ff"
+          fi
+
+          TAG=$(grep -i 'apply tag' $BODY_FILE | sed -E 's/.*apply tag[: ]*`?([^`\n]+)`?.*/\1/i' | tr -d ' ')
+
+          echo "merge_mode=$MERGE_MODE" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🧪 Validate hotfix is based on default branch
         id: basecheck
         run: |
+          DEFAULT_BRANCH=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
+          echo "default_branch=$DEFAULT_BRANCH" >> $GITHUB_ENV
+
           git fetch origin
-          BASE=$(git merge-base origin/${{ inputs.source_branch }} origin/${{ steps.detect_default.outputs.default_branch }})
-          TIP=$(git rev-parse origin/${{ steps.detect_default.outputs.default_branch }})
+          BASE=$(git merge-base origin/${{ github.head_ref }} origin/$DEFAULT_BRANCH)
+          TIP=$(git rev-parse origin/$DEFAULT_BRANCH)
 
           if [ "$BASE" != "$TIP" ]; then
             echo "invalid_base=true" >> $GITHUB_OUTPUT
@@ -66,57 +105,33 @@ jobs:
             echo "invalid_base=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: ❌ Comment if base branch invalid
+      - name: ❌ Comment if base is outdated
         if: steps.basecheck.outputs.invalid_base == 'true'
         uses: peter-evans/create-or-update-comment@v4
         with:
-          issue-number: ${{ inputs.pr_number }}
+          issue-number: ${{ github.event.pull_request.number }}
           body: |
-            ❌ This hotfix branch was not based on the latest `${{ steps.detect_default.outputs.default_branch }}`.
-            Please rebase it and re-submit your pull request.
-
-      - name: 🧪 Validate promotion chain is linear
-        id: chaincheck
-        run: |
-          git fetch origin
-          MERGE_BASE=${{ steps.detect_default.outputs.default_branch }}
-          BRANCHES=($(echo "${{ inputs.branches }}" | tr ',' ' '))
-          for TARGET in "${BRANCHES[@]}"; do
-            COMMON=$(git merge-base origin/$TARGET origin/$MERGE_BASE)
-            BASE_TIP=$(git rev-parse origin/$MERGE_BASE)
-
-            if [ "$COMMON" != "$BASE_TIP" ]; then
-              echo "invalid_chain=$TARGET" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            MERGE_BASE=$TARGET
-          done
-
-      - name: ❌ Comment if promotion chain is broken
-        if: steps.chaincheck.outputs.invalid_chain != ''
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          issue-number: ${{ inputs.pr_number }}
-          body: |
-            ❌ Invalid promotion chain:
-            Branch `${{ steps.chaincheck.outputs.invalid_chain }}` is not based on the previous branch in the promotion sequence.
-            Please align your branches with the expected order (default ➜ staging ➜ qa ➜ ...).
+            ❌ This hotfix is not based on the latest `${{ env.default_branch }}`.
+            Please rebase and update the PR.
 
       - name: 🧪 Dry-run merge through full chain
+        if: steps.basecheck.outputs.invalid_base != 'true'
         id: dryrun
         run: |
           set -e
           git fetch origin
-          MERGE_BASE=${{ steps.detect_default.outputs.default_branch }}
-          BRANCHES=($(echo "${{ inputs.branches }}" | tr ',' ' '))
+          
+          source $GITHUB_ENV
+          MERGE_BASE=$DEFAULT_BRANCH
+          BRANCHES=($(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' '))
 
           git checkout -b dry-$MERGE_BASE origin/$MERGE_BASE
           git merge --no-commit --no-ff origin/${{ inputs.source_branch }} || echo "error_branch=$MERGE_BASE" >> $GITHUB_OUTPUT
 
           for TARGET in "${BRANCHES[@]}"; do
-            git checkout -b dry-$TARGET origin/$TARGET
-            git merge --no-commit --no-ff dry-$MERGE_BASE || echo "error_branch=$TARGET" >> $GITHUB_OUTPUT
-            MERGE_BASE=$TARGET
+           git checkout -b dry-$TARGET origin/$TARGET
+           git merge --no-commit --no-ff dry-$MERGE_BASE || echo "error_branch=$TARGET" >> $GITHUB_OUTPUT
+           MERGE_BASE=$TARGET
           done
         continue-on-error: true
 
@@ -124,25 +139,26 @@ jobs:
         if: steps.dryrun.outputs.error_branch != ''
         uses: peter-evans/create-or-update-comment@v4
         with:
-          issue-number: ${{ inputs.pr_number }}
+          issue-number: ${{ github.event.pull_request.number }}
           body: |
             ❌ Merge conflict detected in `${{ steps.dryrun.outputs.error_branch }}`.
             Please resolve the conflict before this hotfix can be merged.
 
       - name: ✅ Real merge & push
-        if: steps.dryrun.outputs.error_branch == '' && steps.chaincheck.outputs.invalid_chain == ''
+        if: steps.dryrun.outputs.error_branch == ''
         run: |
           git fetch origin
-          MERGE_BASE=${{ steps.detect_default.outputs.default_branch }}
-          BRANCHES=($(echo "${{ inputs.branches }}" | tr ',' ' '))
+
+          MERGE_BASE=$DEFAULT_BRANCH
+          BRANCHES=($(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' '))
 
           git checkout $MERGE_BASE
           git reset --hard origin/$MERGE_BASE
 
-          if [ "${{ inputs.merge_mode }}" = "no-ff" ]; then
-            git merge --no-ff origin/${{ inputs.source_branch }} -m "Hotfix: ${{ inputs.pr_title }}"
+          if [ "${{ steps.meta.outputs.merge_mode }}" = "no-ff" ]; then
+            git merge --no-ff origin/${{ github.head_ref }} -m "Hotfix: ${{ github.event.pull_request.title }}"
           else
-            git merge --ff-only origin/${{ inputs.source_branch }}
+            git merge --ff-only origin/${{ github.head_ref }}
           fi
           git push origin $MERGE_BASE
 
@@ -154,8 +170,8 @@ jobs:
             MERGE_BASE=$TARGET
           done
 
-      - name: 🏷 Push tag (if specified)
-        if: steps.dryrun.outputs.error_branch == '' && inputs.tag != ''
+      - name: 🏷 Tag release (if requested)
+        if: steps.meta.outputs.tag != ''
         run: |
-          git tag -a "${{ inputs.tag }}" -m "Hotfix: ${{ inputs.tag }}"
-          git push origin "${{ inputs.tag }}"
+          git tag -a "${{ steps.meta.outputs.tag }}" -m "Hotfix: ${{ steps.meta.outputs.tag }}"
+          git push origin "${{ steps.meta.outputs.tag }}"
