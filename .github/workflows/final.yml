@@ -131,10 +131,15 @@ jobs:
           git merge --no-commit --no-ff origin/${{ inputs.source_branch }} || echo "error_branch=$MERGE_BASE" >> $GITHUB_OUTPUT
 
           for TARGET in "${BRANCHES[@]}"; dogit reset --hard
-          git clean -fd
-          git checkout -b "dry-$BRANCH" "origin/$BRANCH"
-          git merge --no-commit --no-ff "$MERGE_BASE" || echo "merge failed for $BRANCH"
-          MERGE_BASE=$BRANCH
+
+             git checkout -b "dry-$TARGET" "origin/$TARGET
+             if [ "${{ steps.meta.outputs.merge_mode }}" = "no-ff" ]; then
+                git merge --no-ff "$MERGE_BASE" 
+             else
+                git merge --ff-only "$MERGE_BASE"
+             fi
+             git commit -m "Hotfix: ${{ github.event.pull_request.title }}"
+             MERGE_BASE=$BRANCH
           done
         continue-on-error: true
 
