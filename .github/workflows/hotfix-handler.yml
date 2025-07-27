@@ -123,7 +123,8 @@ jobs:
           
           source $GITHUB_ENV
           MERGE_BASE=$DEFAULT_BRANCH
-          BRANCHES=($(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' '))
+          BRANCHES=$(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' ')
+          echo "Branches: $BRANCHES"
 
           git checkout -b dry-$MERGE_BASE origin/$MERGE_BASE
           git merge --no-commit --no-ff origin/${{ inputs.source_branch }} || echo "error_branch=$MERGE_BASE" >> $GITHUB_OUTPUT
