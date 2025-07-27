@@ -22,7 +22,8 @@ on:
         default: ''
       branches:
         type: string
-        required: true
+        required: false
+        default: 'staging,qa,dev'
         description: "Comma-separated downstream branches (e.g. staging,qa,dev)"
 
 jobs:
@@ -48,8 +49,9 @@ jobs:
       - name: 🧪 Parse downstream branches
         id: parsed
         run: |
-          JSON_ARRAY=$(echo "["${{ inputs.branches//,/"," }}"]")
-          echo "branches=$JSON_ARRAY" >> $GITHUB_OUTPUT
+          IFS=',' read -ra BRANCHES <<< "${{ inputs.branches }}"
+          JSON_ARRAY=$(printf '"%s",' "${BRANCHES[@]}" | sed 's/,$//')
+          echo "branches=[$JSON_ARRAY]" >> $GITHUB_OUTPUT
 
       - name: 🛑 Validate hotfix is based on default branch
         id: basecheck
@@ -59,9 +61,9 @@ jobs:
           TIP=$(git rev-parse origin/${{ steps.detect_default.outputs.default_branch }})
 
           if [ "$BASE" != "$TIP" ]; then
-            echo "::set-output name=invalid_base::true"
+            echo "invalid_base=true" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=invalid_base::false"
+            echo "invalid_base=false" >> $GITHUB_OUTPUT
           fi
 
       - name: ❌ Comment if base branch invalid
@@ -84,7 +86,7 @@ jobs:
             BASE_TIP=$(git rev-parse origin/$MERGE_BASE)
 
             if [ "$COMMON" != "$BASE_TIP" ]; then
-              echo "::set-output name=invalid_chain::$TARGET"
+              echo "invalid_chain=$TARGET" >> $GITHUB_OUTPUT
               exit 0
             fi
             MERGE_BASE=$TARGET
@@ -109,11 +111,11 @@ jobs:
           BRANCHES=($(echo "${{ inputs.branches }}" | tr ',' ' '))
 
           git checkout -b dry-$MERGE_BASE origin/$MERGE_BASE
-          git merge --no-commit --no-ff origin/${{ inputs.source_branch }} || echo "::set-output name=error_branch::$MERGE_BASE"
+          git merge --no-commit --no-ff origin/${{ inputs.source_branch }} || echo "error_branch=$MERGE_BASE" >> $GITHUB_OUTPUT
 
           for TARGET in "${BRANCHES[@]}"; do
             git checkout -b dry-$TARGET origin/$TARGET
-            git merge --no-commit --no-ff dry-$MERGE_BASE || echo "::set-output name=error_branch::$TARGET"
+            git merge --no-commit --no-ff dry-$MERGE_BASE || echo "error_branch=$TARGET" >> $GITHUB_OUTPUT
             MERGE_BASE=$TARGET
           done
         continue-on-error: true
