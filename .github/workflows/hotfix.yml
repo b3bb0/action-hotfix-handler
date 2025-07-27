@@ -1,0 +1,60 @@
+name: 🚨 Hotfix Handler Trigger
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - main
+      - master
+
+jobs:
+  resolve-and-handle-hotfix:
+    if: startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+
+    outputs:
+      resolved_branches: ${{ steps.resolve_branches.outputs.branches }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: 🧩 Resolve downstream branches
+        id: resolve_branches
+        run: |
+          # 1. Check if explicitly passed as workflow input (from JSON block in PR body)
+          INPUT_BRANCHES=$(echo '${{ github.event.pull_request.body }}' | grep -Po '"branches"\s*:\s*\[\K[^\]]+' | tr -d '"' | tr -d ' ')
+          if [ -n "$INPUT_BRANCHES" ]; then
+            echo "branches=$INPUT_BRANCHES" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 2. Check environment variable
+          if [ -n "${{ env.HOTFIX_BRANCHES }}" ]; then
+            echo "branches=${{ env.HOTFIX_BRANCHES }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 3. Check for config file
+          if [ -f .github/.hotfixrc.yaml ]; then
+            VALUE=$(grep -A 10 branches .github/.hotfixrc.yaml | grep '-' | sed 's/- //' | paste -sd "," -)
+            echo "branches=$VALUE" >> $GITHUB_OUTPUT
+            exit 0
+          elif [ -f .hotfixrc.yaml ]; then
+            VALUE=$(grep -A 10 branches .hotfixrc.yaml | grep '-' | sed 's/- //' | paste -sd "," -)
+            echo "branches=$VALUE" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 4. Fallback default
+          echo "branches=staging,qa,dev" >> $GITHUB_OUTPUT
+
+  handle-hotfix:
+    needs: resolve-and-handle-hotfix
+    uses: b3bb0/action-hotfix-handler/.github/workflows/hotfix-handler.yml@v1
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      pr_title: ${{ github.event.pull_request.title }}
+      source_branch: ${{ github.head_ref }}
+      merge_mode: ${{ fromJSON(github.event.pull_request.body || '{}').merge_mode || 'ff' }}
+      tag: ${{ fromJSON(github.event.pull_request.body || '{}').tag || '' }}
+      branches: ${{ needs.resolve-and-handle-hotfix.outputs.resolved_branches }}

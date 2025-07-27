@@ -1,0 +1,29 @@
+name: Hotfix Handler
+description: Reusable GitHub workflow to safely manage hotfix branch merges through a promotion chain
+inputs:
+  pr_number:
+    description: Pull Request number
+    required: true
+  pr_title:
+    description: Pull Request title (used in merge commit)
+    required: true
+  source_branch:
+    description: hotfix/* branch name
+    required: true
+  merge_mode:
+    description: Merge strategy: ff or no-ff
+    required: false
+    default: 'ff'
+  tag:
+    description: Optional tag name to create after merging
+    required: false
+    default: ''
+  branches:
+    description: Comma-separated list of downstream branches to promote to
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: This action must be used via workflow_call.
+      run: echo "Use this as a reusable workflow, not a composite action."
+      shell: bash
