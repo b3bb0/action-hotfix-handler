@@ -14,13 +14,11 @@ In your consuming repo:
 ```yaml
 jobs:
   hotfix:
-    uses: b3bb0/action-hotfix-handler/.github/workflows/hotfix-handler.yml@v1
+    uses: b3bb0/action-hotfix-handler/.github/workflows/final.yml@v1
     with:
       pr_number: ${{ github.event.pull_request.number }}
       pr_title: ${{ github.event.pull_request.title }}
       source_branch: ${{ github.head_ref }}
-      merge_mode: ff
-      tag: v1.2.3
       branches: staging,qa,dev
 ```
 
@@ -31,8 +29,6 @@ jobs:
 | pr_number      | ✅        | Pull request number                         |
 | pr_title       | ✅        | Title used in merge commit                  |
 | source_branch  | ✅        | The hotfix branch (e.g., `hotfix/bug`)      |
-| merge_mode     | ❌        | `ff` or `no-ff` (default: `ff`)             |
-| tag            | ❌        | Optional tag to create                      |
 | branches       | ✅        | Comma-separated downstream branches         |
 
 ---
