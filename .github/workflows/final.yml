@@ -177,7 +177,8 @@ jobs:
           git checkout "$MERGE_BASE" 
           git reset --hard
           git merge  --no-ff "origin/$HOTFIX_BRANCH" -m "mergeun" || echo "Merge into $MERGE_BASE failed"
-
+          git push origin $TARGET
+          
           # for TARGET in "$BRANCHES"; do
           for TARGET in "${BRANCHES[@]}"; do
              git reset --hard
@@ -189,6 +190,13 @@ jobs:
              MERGE_BASE="$TARGET"
           done
 
+      - name: comment merged
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+             morged :)
+             
       - name: 🏷 Tag release (if requested)
         if: steps.meta.outputs.tag != ''
         run: |
