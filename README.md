@@ -29,6 +29,6 @@ jobs:
 | pr_number      | ✅        | Pull request number                         |
 | pr_title       | ✅        | Title used in merge commit                  |
 | source_branch  | ✅        | The hotfix branch (e.g., `hotfix/bug`)      |
-| branches       | ✅        | Comma-separated downstream branches         |
+| branches       | ✅        | Comma-separated downstream branches    **`by stream order`** |
 
 ---
