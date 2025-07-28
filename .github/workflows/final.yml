@@ -127,7 +127,6 @@ jobs:
           BRANCHES=$(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' ')
           echo "Branches: $BRANCHES"
 
-          BRANCHES=$(echo "staging,dev" | tr ',' ' ')
           HOTFIX_BRANCH="${{ inputs.source_branch }}"
           
           git fetch origin
