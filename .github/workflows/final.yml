@@ -160,26 +160,33 @@ jobs:
         if: steps.dryrun.outputs.error_branch == ''
         run: |
           git fetch origin
+          
+          source $GITHUB_ENV
+          DEFAULT_BRANCH=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
+          echo "default_branch=$DEFAULT_BRANCH" 
 
           MERGE_BASE=$DEFAULT_BRANCH
-          BRANCHES=($(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' '))
+          BRANCHES=$(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' ')
+          echo "Branches: $BRANCHES"
+          BRANCHES=( "staging" "dev" )
+          HOTFIX_BRANCH="${{ inputs.source_branch }}"
+          
+          git fetch origin
+          MERGE_BASE="$DEFAULT_BRANCH"
+          
+          git checkout "$MERGE_BASE" 
+          git reset --hard
+          git merge  --no-ff "origin/$HOTFIX_BRANCH" -m "mergeun" || echo "Merge into $MERGE_BASE failed"
 
-          git checkout $MERGE_BASE
-          git reset --hard origin/$MERGE_BASE
-
-          if [ "${{ steps.meta.outputs.merge_mode }}" = "no-ff" ]; then
-            git merge --no-ff origin/${{ github.head_ref }} -m "Hotfix: ${{ github.event.pull_request.title }}"
-          else
-            git merge --ff-only origin/${{ github.head_ref }}
-          fi
-          git push origin $MERGE_BASE
-
+          # for TARGET in "$BRANCHES"; do
           for TARGET in "${BRANCHES[@]}"; do
-            git checkout $TARGET
-            git pull origin $TARGET
-            git merge $MERGE_BASE
-            git push origin $TARGET
-            MERGE_BASE=$TARGET
+             git reset --hard
+             git clean -fd
+             
+             git checkout "$TARGET"
+             git merge --no-ff "$MERGE_BASE" -m "update" || echo "Merge into $TARGET failed"
+             git push origin $TARGET
+             MERGE_BASE="$TARGET"
           done
 
       - name: 🏷 Tag release (if requested)
