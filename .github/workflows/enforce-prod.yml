@@ -1,0 +1,19 @@
+name: 🚨 Require Approval for environment/prod
+on:
+  pull_request:
+    branches: [environment/prod]
+jobs:
+  check-approval:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require approval
+        run: |
+          APPROVALS=$(gh pr view ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} --json reviews \
+            --jq '[.reviews[] | select(.state=="APPROVED")] | length')
+          if [[ "$APPROVALS" -lt 1 ]]; then
+            echo "❌ No approval for production"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

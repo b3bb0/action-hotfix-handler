@@ -1,0 +1,9 @@
+pull_request_templates:
+  - name: ♻️ Feature / Enhancement
+    file: feature.md
+  - name: 🛠️ Hotfix
+    file: hotfix.md
+  - name: 🚀 Major Version / Overhaul
+    file: major.md
+  - name: 🧩 Default Template
+    file: default.md

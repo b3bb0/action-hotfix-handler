@@ -1,0 +1,19 @@
+name: 🧪 Require Review for release/*
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  check:
+    if: startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require approval
+        run: |
+          COUNT=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} \
+            --json reviews --jq '[.reviews[] | select(.state=="APPROVED")] | length')
+          if [[ "$COUNT" -eq 0 ]]; then
+            echo "❌ No approvals"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

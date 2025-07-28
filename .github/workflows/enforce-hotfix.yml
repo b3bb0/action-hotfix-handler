@@ -1,0 +1,20 @@
+name: 🔒 Enforce Hotfix Approval
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+jobs:
+  require-approval:
+    if: startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check approval
+        run: |
+          gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} \
+            --json reviews --jq '[.reviews[] | select(.state=="APPROVED")] | length' > count.txt
+          if [[ $(<count.txt) -lt 1 ]]; then
+            echo "❌ No approval"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

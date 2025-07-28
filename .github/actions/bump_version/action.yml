@@ -1,0 +1,35 @@
+name: Bump Version
+description: Bumps version and optionally tags/releases
+inputs:
+  level:
+    required: true
+  create_tag:
+    default: "true"
+  create_pr:
+    default: "false"
+  create_release:
+    default: "false"
+  base_branch:
+    default: "main"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Bump version
+      shell: bash
+      run: .github/actions/bump_version/bump-version.sh "${{ inputs.level }}"
+    - name: Create Git tag
+      if: inputs.create_tag == 'true'
+      shell: bash
+      run: |
+        V="v$(cat .github/.version)"
+        git tag "$V"
+        git push origin "$V"
+    - name: GitHub Release
+      if: inputs.create_release == 'true'
+      shell: bash
+      run: |
+        V="v$(cat .github/.version)"
+        gh release create "$V" --generate-notes --title "$V"
+      env:
+        GH_TOKEN: ${{ github.token }}
