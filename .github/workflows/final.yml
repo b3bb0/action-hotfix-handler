@@ -126,7 +126,7 @@ jobs:
           MERGE_BASE=$DEFAULT_BRANCH
           BRANCHES=$(echo "${{ steps.resolve_branches.outputs.branches }}" | tr ',' ' ')
           echo "Branches: $BRANCHES"
-
+          BRANCHES=( "staging" "dev" )
           HOTFIX_BRANCH="${{ inputs.source_branch }}"
           
           git fetch origin
@@ -134,8 +134,8 @@ jobs:
           git checkout -b "dry-$MERGE_BASE" "origin/$MERGE_BASE"
           git merge  --no-ff "origin/$HOTFIX_BRANCH" -m "testing dry run" || echo "Merge into $MERGE_BASE failed"
 
-          for TARGET in "$BRANCHES"; do
-          #for TARGET in "${BRANCHES[@]}"; do
+          # for TARGET in "$BRANCHES"; do
+          for TARGET in "${BRANCHES[@]}"; do
              git reset --hard
              git clean -fd
              
