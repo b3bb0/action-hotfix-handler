@@ -134,8 +134,9 @@ jobs:
           MERGE_BASE="$DEFAULT_BRANCH"
           git checkout -b "dry-$MERGE_BASE" "origin/$MERGE_BASE"
           git merge  --no-ff "origin/$HOTFIX_BRANCH" -m "testing dry run" || echo "Merge into $MERGE_BASE failed"
-          
-          for TARGET in "${BRANCHES[@]}"; do
+
+          for TARGET in "$BRANCHES"; do
+          #for TARGET in "${BRANCHES[@]}"; do
              git reset --hard
              git clean -fd
              
